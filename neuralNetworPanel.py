@@ -7,7 +7,7 @@ bl_info = {
     "blender": (2, 93, 1),
     "location": "View3D > NN > controls",
     "description": "Create a Neural Network and Training it.",
-    "warning": "",
+    "warning": "This file works library that are still in beta.",
     "doc_url": "https://github.com/barckley75/Blender_Neural_Network",
     "category": "Artificial Neural Network",
 }
