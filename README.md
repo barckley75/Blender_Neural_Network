@@ -1,6 +1,8 @@
 # Blender_Neural_Network
 Create an Artificial Neural Network Model in Blender
 
+Blender 2.93.1, Animaiton Nodes 2.2.2
+
 Blender Neural Network is an addon f
 or Blender that creates a panel in the 3D view. With this panel you can create the model of ANN.
 Some examples:
