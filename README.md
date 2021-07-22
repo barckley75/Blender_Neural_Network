@@ -45,4 +45,7 @@ Input Size = 784, Hidden Layer  = 100, Output = 9
    
    10. ![Data](https://github.com/barckley75/Blender_Neural_Network/blob/d7ec4d06196605717da7b04d550751890a0f32fc/AN_Script_training_model.png)
 
+<h1>>The Panel</h1>
+This is the aspect of the panel, you can pretty much control all the important visualization aspects. The panel still missing the possibility to control the distance between the layers. If you want to contribute, please, you are welcome.
+
 ![Panel](https://github.com/barckley75/Blender_Neural_Network/blob/1baf0de336c445f8e7f8b610caf3ad9039fe85b4/panel.png)
