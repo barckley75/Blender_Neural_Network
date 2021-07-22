@@ -302,7 +302,7 @@ class VIEW3D_PT_NN_model_shape(bpy.types.Panel):
         col = self.layout.column(align=True)
         col.label(text='Output Shape')
         col.prop(AN_node.nodes["Data Input.022"].inputs[0], 'value',
-                 text='Dataset')
+                 text='Output')
 
 # VIEW3D_PT_NN_model_training where the meaning of VIEW3D -> 3D view, P -> panel, T -> type and then the - name of the class
 
