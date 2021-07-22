@@ -3,8 +3,7 @@ Create an Artificial Neural Network Model in Blender
 
 [Blender 2.93.1](https://www.blender.org), [Animation Nodes 2.2.2](https://animation-nodes.com) (this version still in development).
 
-Blender Neural Network is an addon f
-or Blender that creates a panel in the 3D view. With this panel you can create the model of ANN.
+Blender Neural Network is an addon for Blender that creates a panel in the 3D view. With this panel you can create the model of ANN.
 Some examples:
 
 Input Size = 15, Hidden Layer  = 10, Output = 2
@@ -28,6 +27,22 @@ Input Size = 784, Hidden Layer  = 100, Output = 9
 3. **<h3>Neuron Model Shape</h3>**
    1. Here it is possible to change the 'SHAPE' of the neurons (it is not connected with Numpy, it is just for aesthetic purpose). For instance, MNIST handwritten is a dataset of image 28 x 28, if you are reading an array with one dimension, you will have 28x28 = 784 pixels, and this case the size will be 784 and the shape 28.
 4. **<h3>Training Data</h3>**
-   1. this section is for training the model and still in development. At the moment you can add the path of the dataset and it will be read directly in Animation Nodes. In this case the the size input of the dataset will be the length of the columns.
+   1. this section is for training the model and still in development. At the moment you can add the path of the dataset and it will be read directly in Animation Nodes. In this case the the size input of the dataset will be the length of the columns. In the tree you will find this node, Training Model, here converge all the variables you need to update your model. This is the variables:
+
+* Variables
+  * dataset_path
+  * inputs
+  * hiddenLayer_1
+  * output
+  * epochs
+  * minibatch
+  * eta
+   
+   To import, for instance, Tensorflow in Blender, I suggest to install it inside the Blender site-packages. [Here](https://stackoverflow.com/questions/68297161/creating-a-blender-mesh-directly-from-numpy-data/68330437#68330437) how to do it.
+   In this case, as you can read in the node script, we are reading training_data file from Text Area in Blender, in this file you have direct access to the viriables declared in the node. So, for example, you can pass the hidden neurons in this way: 
+   >keras.Input(shape=(hiddenLayer_1,))
+  Where hiddenLayer_1 is the variable red from the panel. 
+   
+   10. ![Data](https://github.com/barckley75/Blender_Neural_Network/blob/d7ec4d06196605717da7b04d550751890a0f32fc/AN_Script_training_model.png)
 
 ![Panel](https://github.com/barckley75/Blender_Neural_Network/blob/1baf0de336c445f8e7f8b610caf3ad9039fe85b4/panel.png)
