@@ -38,7 +38,7 @@ Input Size = 784, Hidden Layer  = 100, Output = 9
   * minibatch
   * eta
    
-   To import, for instance, Tensorflow in Blender, I suggest to install it inside the Blender site-packages. [Here](https://stackoverflow.com/questions/68297161/creating-a-blender-mesh-directly-from-numpy-data/68330437#68330437) how to do it.
+   To import, for instance, Tensorflow in Blender, I suggest to install it inside the Blender site-packages. [Here](https://stackoverflow.com/questions/65076829/how-to-use-tensorflow-in-blender/68335409#68335409) how to do it.
    In this case, as you can read in the node script, we are reading training_data file from Text Area in Blender, in this file you have direct access to the viriables declared in the node. So, for example, you can pass the hidden neurons in this way: 
    >keras.Input(shape=(hiddenLayer_1,))
   Where hiddenLayer_1 is the variable red from the panel. 
