@@ -104,7 +104,8 @@ class VIEW3D_PT_NN_aspect(_NNPanelBase, bpy.types.Panel):
         col = layout.column(align=True)
         col.label(text="Connections")
         _draw_mod_prop(col, mod, "Connection Visibility", "Visible")
-        _draw_mod_prop(col, mod, "Connection Radius", "Radius")
+        _draw_mod_prop(col, mod, "Connection Radius", "Thickness")
+        _draw_mod_prop(col, mod, "Weight Scale", "Weight Scale (0=off)")
 
         col = layout.column(align=True)
         col.label(text="Spacing")

@@ -23,28 +23,28 @@ def _layer_names(hidden_count: int) -> list[str]:
     return ["Input"] + [f"L{i + 1}" for i in range(hidden_count)] + ["Output"]
 
 
-def _build_interface_spec(hidden_count: int) -> list[tuple[str, str, object]]:
-    sockets: list[tuple[str, str, object]] = [
-        ("Input Size", "NodeSocketInt", 3),
-        ("Input Grid", "NodeSocketInt", 1),
+def _build_interface_spec(hidden_count: int) -> list[tuple[str, str, object, object, object]]:
+    sockets: list[tuple[str, str, object, object, object]] = [
+        ("Input Size", "NodeSocketInt", 3, 1, 4096),
+        ("Input Grid", "NodeSocketInt", 1, 1, 128),
     ]
     for i in range(hidden_count):
-        sockets.append((f"L{i + 1} Size", "NodeSocketInt", 4 if i == 0 else 1))
-        sockets.append((f"L{i + 1} Grid", "NodeSocketInt", 1))
+        sockets.append((f"L{i + 1} Size", "NodeSocketInt", 4 if i == 0 else 1, 0, 4096))
+        sockets.append((f"L{i + 1} Grid", "NodeSocketInt", 1, 1, 128))
     sockets += [
-        ("Output Size", "NodeSocketInt", 2),
-        ("Output Grid", "NodeSocketInt", 1),
-        ("Input Aspect", "NodeSocketInt", 0),
-        ("Hidden Aspect", "NodeSocketInt", 1),
-        ("Output Aspect", "NodeSocketInt", 0),
-        ("Input Mesh Size", "NodeSocketFloat", 0.3),
-        ("Hidden Mesh Size", "NodeSocketFloat", 0.3),
-        ("Output Mesh Size", "NodeSocketFloat", 0.3),
-        ("Connection Visibility", "NodeSocketBool", True),
-        ("Connection Radius", "NodeSocketFloat", 0.01),
-        ("Weight Scale", "NodeSocketFloat", 0.0),
-        ("Layer Spacing", "NodeSocketFloat", 5.0),
-        ("Neuron Spacing", "NodeSocketFloat", 1.0),
+        ("Output Size", "NodeSocketInt", 2, 1, 4096),
+        ("Output Grid", "NodeSocketInt", 1, 1, 128),
+        ("Input Aspect", "NodeSocketInt", 0, 0, 2),
+        ("Hidden Aspect", "NodeSocketInt", 1, 0, 2),
+        ("Output Aspect", "NodeSocketInt", 0, 0, 2),
+        ("Input Mesh Size", "NodeSocketFloat", 0.3, 0.001, 10.0),
+        ("Hidden Mesh Size", "NodeSocketFloat", 0.3, 0.001, 10.0),
+        ("Output Mesh Size", "NodeSocketFloat", 0.3, 0.001, 10.0),
+        ("Connection Visibility", "NodeSocketBool", True, None, None),
+        ("Connection Radius", "NodeSocketFloat", 0.3, 0.0, 100.0),
+        ("Weight Scale", "NodeSocketFloat", 0.0, 0.0, 1.0),
+        ("Layer Spacing", "NodeSocketFloat", 5.0, 0.5, 1000.0),
+        ("Neuron Spacing", "NodeSocketFloat", 1.0, 0.5, 1000.0),
     ]
     return sockets
 
@@ -60,12 +60,22 @@ def _declare_interface(group: bpy.types.NodeTree, hidden_count: int) -> None:
     iface = group.interface
     iface.new_socket(name="Geometry", in_out="OUTPUT", socket_type="NodeSocketGeometry")
     iface.new_socket(name="Geometry", in_out="INPUT", socket_type="NodeSocketGeometry")
-    for name, socket_type, default in _build_interface_spec(hidden_count):
+    for name, socket_type, default, min_val, max_val in _build_interface_spec(hidden_count):
         socket = iface.new_socket(name=name, in_out="INPUT", socket_type=socket_type)
         try:
             socket.default_value = default
         except (TypeError, AttributeError):
             pass
+        if min_val is not None and hasattr(socket, "min_value"):
+            try:
+                socket.min_value = min_val
+            except (TypeError, AttributeError):
+                pass
+        if max_val is not None and hasattr(socket, "max_value"):
+            try:
+                socket.max_value = max_val
+            except (TypeError, AttributeError):
+                pass
 
 
 def _new(group, bl_idname, name=None, location=None):
@@ -331,12 +341,23 @@ def _build_connection_pair(
     abs_w.operation = "ABSOLUTE"
     _link(group, sample_w.outputs[0], abs_w.inputs[0])
 
-    mix_w = _new(group, "ShaderNodeMix", "Mix", (x + 1900, y - 1100))
+    sqrt_w = _new(group, "ShaderNodeMath", "sqrt|w|", (x + 1800, y - 1100))
+    sqrt_w.operation = "POWER"
+    _link(group, abs_w.outputs[0], sqrt_w.inputs[0])
+    sqrt_w.inputs[1].default_value = 0.5
+
+    amp_w = _new(group, "ShaderNodeMath", "0.5+1.5x", (x + 1900, y - 1100))
+    amp_w.operation = "MULTIPLY_ADD"
+    _link(group, sqrt_w.outputs[0], amp_w.inputs[0])
+    amp_w.inputs[1].default_value = 1.5
+    amp_w.inputs[2].default_value = 0.5
+
+    mix_w = _new(group, "ShaderNodeMix", "Mix", (x + 2000, y - 1100))
     mix_w.data_type = "FLOAT"
     mix_w.clamp_factor = True
     _link(group, group_input.outputs["Weight Scale"], mix_w.inputs[0])
     mix_w.inputs[2].default_value = 1.0
-    _link(group, abs_w.outputs[0], mix_w.inputs[3])
+    _link(group, amp_w.outputs[0], mix_w.inputs[3])
 
     mul_r = _new(group, "ShaderNodeMath", "r*mix", (x + 2100, y - 1100))
     mul_r.operation = "MULTIPLY"
@@ -346,12 +367,18 @@ def _build_connection_pair(
     m2c = _new(group, "GeometryNodeMeshToCurve", "M2C", (x + 1600, y))
     _link(group, set_pos.outputs["Geometry"], m2c.inputs["Mesh"])
 
-    set_radius = _new(group, "GeometryNodeSetCurveRadius", "SetR",
-                      (x + 2300, y))
-    _link(group, m2c.outputs["Curve"], set_radius.inputs["Curve"])
-    _link(group, mul_r.outputs[0], set_radius.inputs["Radius"])
+    profile = _new(group, "GeometryNodeCurvePrimitiveCircle", "Profile",
+                   (x + 2300, y - 400))
+    profile.mode = "RADIUS"
+    profile.inputs["Resolution"].default_value = 6
+    profile.inputs["Radius"].default_value = 0.1
 
-    return set_radius.outputs["Curve"], pair_size.outputs[0]
+    c2m = _new(group, "GeometryNodeCurveToMesh", "C2M", (x + 2500, y))
+    _link(group, m2c.outputs["Curve"], c2m.inputs["Curve"])
+    _link(group, profile.outputs["Curve"], c2m.inputs["Profile Curve"])
+    _link(group, mul_r.outputs[0], c2m.inputs["Scale"])
+
+    return c2m.outputs["Mesh"], pair_size.outputs[0]
 
 
 def _build_connections(
