@@ -65,6 +65,7 @@ class NN_OT_create(bpy.types.Operator):
     bl_options = {"REGISTER", "UNDO"}
 
     def execute(self, context):
+        tree_builder.ensure_input_material()
         node_group = _append_node_group()
         if node_group is None:
             self.report(
@@ -88,6 +89,100 @@ class NN_OT_create(bpy.types.Operator):
             o.select_set(False)
         obj.select_set(True)
         context.view_layer.objects.active = obj
+        return {"FINISHED"}
+
+
+class NN_OT_load_sample(bpy.types.Operator):
+    """Load one sample from the training dataset into the input-layer neurons."""
+
+    bl_idname = "nn.load_sample"
+    bl_label = "Show Sample"
+    bl_options = {"REGISTER", "UNDO"}
+
+    sample_index: bpy.props.IntProperty(name="Sample Index", default=0, min=0)
+
+    @classmethod
+    def poll(cls, context):
+        return get_nn_modifier(context.active_object) is not None
+
+    def execute(self, context):
+        import os
+
+        import numpy as np
+
+        obj = context.active_object
+        mod = get_nn_modifier(obj)
+        settings = context.scene.nn_training
+        path = bpy.path.abspath(settings.dataset_path)
+        if not path or not os.path.exists(path):
+            self.report({"ERROR"}, "Dataset path not set. Set it in the Training panel.")
+            return {"CANCELLED"}
+
+        try:
+            ext = os.path.splitext(path)[1].lower()
+            if ext == ".npz":
+                data = np.load(path)
+                if "X" not in data.files:
+                    raise ValueError("npz missing 'X'")
+                X = data["X"]
+            elif ext == ".csv":
+                arr = np.loadtxt(path, delimiter=",", dtype=np.float32)
+                X = arr[:, :-1]
+            elif ext == ".pt":
+                import torch
+
+                loaded = torch.load(path, map_location="cpu")
+                if isinstance(loaded, dict):
+                    X = loaded["X"].numpy() if hasattr(loaded["X"], "numpy") else loaded["X"]
+                else:
+                    X = loaded[0].numpy() if hasattr(loaded[0], "numpy") else loaded[0]
+            else:
+                raise ValueError(f"unsupported dataset extension {ext}")
+        except Exception as exc:
+            self.report({"ERROR"}, f"Failed to read dataset: {exc}")
+            return {"CANCELLED"}
+
+        if self.sample_index >= len(X):
+            self.report(
+                {"ERROR"},
+                f"Sample {self.sample_index} out of range (dataset has {len(X)} samples).",
+            )
+            return {"CANCELLED"}
+
+        sample = np.asarray(X[self.sample_index]).flatten().astype(np.float32)
+        input_size = len(sample)
+
+        try:
+            grid_ident = socket_identifier(mod.node_group, "Input Grid")
+            input_size_ident = socket_identifier(mod.node_group, "Input Size")
+            if grid_ident and input_size_ident:
+                rows = int(mod[grid_ident])
+                tree_input_size = int(mod[input_size_ident])
+                cols = (tree_input_size + rows - 1) // rows if rows > 0 else 0
+                if rows > 0 and cols > 0 and rows * cols == input_size:
+                    img = sample.reshape(rows, cols)
+                    img = np.rot90(img, k=-1)
+                    sample = img.flatten().astype(np.float32)
+        except Exception:
+            pass
+
+        mesh = obj.data
+        if len(mesh.vertices) < input_size:
+            mesh.vertices.add(input_size - len(mesh.vertices))
+
+        attr = mesh.attributes.get(tree_builder.INPUT_ATTRIBUTE)
+        if attr is None:
+            attr = mesh.attributes.new(
+                name=tree_builder.INPUT_ATTRIBUTE, type="FLOAT", domain="POINT"
+            )
+
+        values = np.zeros(len(mesh.vertices), dtype=np.float32)
+        values[:input_size] = sample
+        attr.data.foreach_set("value", values)
+        mesh.update()
+        obj.update_tag(refresh={"DATA"})
+
+        self.report({"INFO"}, f"Loaded sample {self.sample_index}")
         return {"FINISHED"}
 
 
@@ -129,7 +224,7 @@ def _add_menu_entry(self, context):
     self.layout.operator(NN_OT_create.bl_idname, icon="NODETREE")
 
 
-_classes = (NN_OT_create, NN_OT_rebuild_tree)
+_classes = (NN_OT_create, NN_OT_load_sample, NN_OT_rebuild_tree)
 
 
 def register():

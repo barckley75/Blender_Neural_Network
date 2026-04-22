@@ -68,8 +68,14 @@ def save_blend() -> str:
     group = tree_builder.build_tree(hidden_count=HIDDEN_COUNT)
     group.use_fake_user = True
 
+    datablocks: set = {group}
+    material = bpy.data.materials.get(tree_builder.INPUT_MATERIAL_NAME)
+    if material is not None:
+        material.use_fake_user = True
+        datablocks.add(material)
+
     out_path = os.path.join(out_dir, OUTPUT_BLEND_RELPATH)
-    bpy.data.libraries.write(out_path, {group}, fake_user=True, compress=True)
+    bpy.data.libraries.write(out_path, datablocks, fake_user=True, compress=True)
     return out_path
 
 

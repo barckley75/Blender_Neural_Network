@@ -14,9 +14,44 @@ import bpy
 
 NODE_GROUP_NAME = "NeuralNetwork"
 WEIGHT_ATTRIBUTE = "nn_weight"
+INPUT_ATTRIBUTE = "nn_input"
+INPUT_PIXEL_ATTRIBUTE = "nn_input_pixel"
+INPUT_MATERIAL_NAME = "NN_InputColor"
 
 DEFAULT_HIDDEN_COUNT = 3
 MAX_HIDDEN_COUNT = 32
+
+
+def ensure_input_material() -> bpy.types.Material:
+    """Create (or return) the emission material used by input-layer neurons.
+
+    The material emits white light scaled by the per-neuron attribute
+    `nn_input_pixel`. Values in [0, 1] → black (off) to white (bright).
+    """
+    mat = bpy.data.materials.get(INPUT_MATERIAL_NAME)
+    if mat is not None:
+        return mat
+    mat = bpy.data.materials.new(INPUT_MATERIAL_NAME)
+    mat.use_fake_user = True
+    mat.use_nodes = True
+    nt = mat.node_tree
+    for n in list(nt.nodes):
+        nt.nodes.remove(n)
+
+    output = nt.nodes.new("ShaderNodeOutputMaterial")
+    output.location = (400, 0)
+
+    emission = nt.nodes.new("ShaderNodeEmission")
+    emission.location = (200, 0)
+    emission.inputs["Color"].default_value = (1.0, 1.0, 1.0, 1.0)
+
+    attr = nt.nodes.new("ShaderNodeAttribute")
+    attr.attribute_name = INPUT_PIXEL_ATTRIBUTE
+    attr.location = (0, 0)
+
+    nt.links.new(attr.outputs["Fac"], emission.inputs["Strength"])
+    nt.links.new(emission.outputs[0], output.inputs["Surface"])
+    return mat
 
 
 def _layer_names(hidden_count: int) -> list[str]:
@@ -101,6 +136,8 @@ def _build_layer(
     aspect_socket: str,
     mesh_size_socket: str,
     y_offset: float,
+    is_input_layer: bool = False,
+    input_material: bpy.types.Material | None = None,
 ) -> tuple[bpy.types.NodeSocket, bpy.types.NodeSocket]:
     out_in = group_input.outputs
 
@@ -228,11 +265,48 @@ def _build_layer(
     _link(group, aspect_switch.outputs[0], iop.inputs["Instance"])
     _link(group, scale_vec.outputs[0], iop.inputs["Scale"])
 
-    realize = _new(group, "GeometryNodeRealizeInstances", f"{size_socket} Realize",
-                   (2400, y_offset))
-    _link(group, iop.outputs["Instances"], realize.inputs["Geometry"])
+    instances_out: bpy.types.NodeSocket = iop.outputs["Instances"]
 
-    return realize.outputs[0], set_pos.outputs["Geometry"]
+    if is_input_layer:
+        pix_idx = _new(group, "GeometryNodeInputIndex", f"{size_socket} PIdx",
+                       (2200, y_offset - 500))
+
+        pix_attr = _new(group, "GeometryNodeInputNamedAttribute", f"{size_socket} PixAttr",
+                        (2200, y_offset - 650))
+        pix_attr.data_type = "FLOAT"
+        pix_attr.inputs["Name"].default_value = INPUT_ATTRIBUTE
+
+        sample_pix = _new(group, "GeometryNodeSampleIndex", f"{size_socket} SampPix",
+                          (2400, y_offset - 550))
+        sample_pix.data_type = "FLOAT"
+        sample_pix.domain = "POINT"
+        _link(group, group_input.outputs["Geometry"], sample_pix.inputs["Geometry"])
+        _link(group, pix_attr.outputs[0], sample_pix.inputs["Value"])
+        _link(group, pix_idx.outputs[0], sample_pix.inputs["Index"])
+
+        store_pix = _new(group, "GeometryNodeStoreNamedAttribute", f"{size_socket} StorePix",
+                         (2600, y_offset - 200))
+        store_pix.data_type = "FLOAT"
+        store_pix.domain = "INSTANCE"
+        store_pix.inputs["Name"].default_value = INPUT_PIXEL_ATTRIBUTE
+        _link(group, iop.outputs["Instances"], store_pix.inputs["Geometry"])
+        _link(group, sample_pix.outputs[0], store_pix.inputs["Value"])
+        instances_out = store_pix.outputs["Geometry"]
+
+    realize = _new(group, "GeometryNodeRealizeInstances", f"{size_socket} Realize",
+                   (2800, y_offset))
+    _link(group, instances_out, realize.inputs["Geometry"])
+
+    geom_out: bpy.types.NodeSocket = realize.outputs[0]
+
+    if is_input_layer and input_material is not None:
+        set_mat = _new(group, "GeometryNodeSetMaterial", f"{size_socket} Mat",
+                       (3000, y_offset))
+        _link(group, realize.outputs[0], set_mat.inputs["Geometry"])
+        set_mat.inputs["Material"].default_value = input_material
+        geom_out = set_mat.outputs["Geometry"]
+
+    return geom_out, set_pos.outputs["Geometry"]
 
 
 def _build_connection_pair(
@@ -446,6 +520,8 @@ def build_tree(hidden_count: int = DEFAULT_HIDDEN_COUNT) -> bpy.types.NodeTree:
     if hidden_count > MAX_HIDDEN_COUNT:
         raise ValueError(f"hidden_count must be <= {MAX_HIDDEN_COUNT}")
 
+    input_material = ensure_input_material()
+
     group = bpy.data.node_groups.get(NODE_GROUP_NAME)
     if group is None:
         group = bpy.data.node_groups.new(NODE_GROUP_NAME, "GeometryNodeTree")
@@ -478,6 +554,8 @@ def build_tree(hidden_count: int = DEFAULT_HIDDEN_COUNT) -> bpy.types.NodeTree:
             aspect_socket=aspect_socket,
             mesh_size_socket=mesh_size_socket,
             y_offset=-i * 1000,
+            is_input_layer=(name == "Input"),
+            input_material=input_material if name == "Input" else None,
         )
         layer_geo_outputs.append(geo_out)
         layer_point_outputs.append(pts_out)

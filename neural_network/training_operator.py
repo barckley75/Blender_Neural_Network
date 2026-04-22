@@ -20,6 +20,8 @@ def _layer_sizes_from_modifier(mod) -> list[int]:
 def _push_weights_to_object(obj, trainer) -> tuple[int, float]:
     """Replace obj's mesh with one carrying an 'nn_weight' per-point attribute.
     Returns (weight_count, max_abs) for UI reporting."""
+    import numpy as np
+
     from . import nn_training
 
     signed_norm, max_abs = trainer.flat_weights()
@@ -27,15 +29,32 @@ def _push_weights_to_object(obj, trainer) -> tuple[int, float]:
     if n == 0:
         return 0, 0.0
 
+    preserved_input: "np.ndarray | None" = None
+    old_mesh = obj.data
+    if old_mesh is not None:
+        old_attr = old_mesh.attributes.get(tree_builder.INPUT_ATTRIBUTE)
+        if old_attr is not None and len(old_attr.data) > 0:
+            preserved_input = np.zeros(len(old_attr.data), dtype=np.float32)
+            old_attr.data.foreach_get("value", preserved_input)
+
     mesh = bpy.data.meshes.new(f"{obj.name}_weights")
     mesh.vertices.add(n)
     attr = mesh.attributes.new(
         name=tree_builder.WEIGHT_ATTRIBUTE, type="FLOAT", domain="POINT"
     )
     attr.data.foreach_set("value", signed_norm)
+
+    if preserved_input is not None:
+        in_attr = mesh.attributes.new(
+            name=tree_builder.INPUT_ATTRIBUTE, type="FLOAT", domain="POINT"
+        )
+        values = np.zeros(n, dtype=np.float32)
+        copy_n = min(n, preserved_input.size)
+        values[:copy_n] = preserved_input[:copy_n]
+        in_attr.data.foreach_set("value", values)
+
     mesh.update()
 
-    old_mesh = obj.data
     obj.data = mesh
     if old_mesh is not None and old_mesh.users == 0:
         bpy.data.meshes.remove(old_mesh)

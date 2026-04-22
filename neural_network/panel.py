@@ -164,6 +164,12 @@ class NNTrainingSettings(bpy.types.PropertyGroup):
     last_accuracy: bpy.props.FloatProperty(name="Last Accuracy", default=-1.0)
     progress: bpy.props.FloatProperty(name="Progress", default=0.0, min=0.0, max=1.0)
     is_training: bpy.props.BoolProperty(name="Is Training", default=False)
+    sample_index: bpy.props.IntProperty(
+        name="Sample Index",
+        description="Dataset sample to display on the input-layer neurons",
+        default=0,
+        min=0,
+    )
 
 
 class VIEW3D_PT_NN_training(_NNPanelBase, bpy.types.Panel):
@@ -193,6 +199,13 @@ class VIEW3D_PT_NN_training(_NNPanelBase, bpy.types.Panel):
             box = layout.box()
             box.label(text=f"Last loss: {settings.last_loss:.4f}")
             box.label(text=f"Last accuracy: {settings.last_accuracy * 100:.2f}%")
+
+        box = layout.box()
+        box.label(text="Show dataset sample")
+        row = box.row(align=True)
+        row.prop(settings, "sample_index", text="Sample")
+        op = row.operator("nn.load_sample", text="Show", icon="IMAGE_DATA")
+        op.sample_index = settings.sample_index
 
 
 _classes = (
