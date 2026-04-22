@@ -1,0 +1,18 @@
+schema_version = "1.0.0"
+
+id = "neural_network"
+version = "1.0.0"
+name = "Artificial Neural Network"
+tagline = "Visualize and train neural networks with Geometry Nodes and PyTorch"
+maintainer = "Ivo Vacca"
+type = "add-on"
+
+website = "https://github.com/barckley75/Blender_Neural_Network"
+
+tags = ["Node", "Mesh"]
+
+blender_version_min = "4.2.0"
+
+license = [
+  "SPDX:MIT",
+]

@@ -1,0 +1,22 @@
+__pycache__/
+*.py[cod]
+*$py.class
+*.blend1
+*.blend2
+.DS_Store
+.vscode/
+.idea/
+*.egg-info/
+.pytest_cache/
+
+# Build artifacts
+neural_network.zip
+
+# Local Claude Code guidance (not part of the addon)
+CLAUDE.md
+
+# Local plan / task notes
+tasks/
+
+# Stray test blends at repo root
+/tree.blend
