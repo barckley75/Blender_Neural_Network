@@ -4,6 +4,13 @@ Create and train artificial neural networks inside Blender, visualized as 3D geo
 
 ![MNIST](files/Image.GIF)
 
+## Gallery
+
+| | |
+|---|---|
+| ![Panel](files/Screenshot_1.png) | ![Network](files/Screenshot_2.png) |
+| ![Training](files/Screenshot_3.png) | ![Prediction](files/Screenshot_4.png) |
+
 Now targeting **Blender 5.1+** with **Geometry Nodes** and **PyTorch**. The 2021 version that used Animation Nodes + TensorFlow is still in the git history; this one is a clean-sheet rewrite.
 
 ## What it does
