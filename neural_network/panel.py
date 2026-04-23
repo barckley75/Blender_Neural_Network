@@ -170,6 +170,14 @@ class NNTrainingSettings(bpy.types.PropertyGroup):
         default=0,
         min=0,
     )
+    play_interval: bpy.props.FloatProperty(
+        name="Interval (s)",
+        description="Seconds between samples when playing",
+        default=0.5,
+        min=0.05,
+        max=10.0,
+    )
+    is_playing: bpy.props.BoolProperty(name="Is Playing", default=False)
 
 
 class VIEW3D_PT_NN_training(_NNPanelBase, bpy.types.Panel):
@@ -206,6 +214,13 @@ class VIEW3D_PT_NN_training(_NNPanelBase, bpy.types.Panel):
         row.prop(settings, "sample_index", text="Sample")
         op = row.operator("nn.load_sample", text="Show", icon="IMAGE_DATA")
         op.sample_index = settings.sample_index
+
+        row = box.row(align=True)
+        row.prop(settings, "play_interval", text="Interval")
+        if settings.is_playing:
+            row.operator("nn.stop_playing", text="", icon="PAUSE")
+        else:
+            row.operator("nn.play_samples", text="Play", icon="PLAY")
 
 
 _classes = (

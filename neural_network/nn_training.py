@@ -37,6 +37,43 @@ def _pick_device():
     return torch.device("cpu")
 
 
+def save_model(model: "nn.Module", layer_sizes: list[int], path: str) -> None:
+    if not _TORCH_AVAILABLE:
+        raise RuntimeError("PyTorch not installed")
+    torch.save(
+        {"state_dict": model.state_dict(), "layer_sizes": list(layer_sizes)},
+        path,
+    )
+
+
+def load_model(path: str) -> tuple["nn.Module", list[int]]:
+    if not _TORCH_AVAILABLE:
+        raise RuntimeError("PyTorch not installed")
+    obj = torch.load(path, map_location="cpu")
+    if not isinstance(obj, dict) or "state_dict" not in obj or "layer_sizes" not in obj:
+        raise ValueError("Model file missing 'state_dict' or 'layer_sizes'")
+    layer_sizes = list(obj["layer_sizes"])
+    model = build_model(layer_sizes)
+    model.load_state_dict(obj["state_dict"])
+    model.eval()
+    return model, layer_sizes
+
+
+def predict(model: "nn.Module", x):
+    """Forward pass + softmax. x is a 1D float array; returns a 1D numpy array
+    of probabilities summing to 1."""
+    if not _TORCH_AVAILABLE:
+        raise RuntimeError("PyTorch not installed")
+    import numpy as np
+    import torch.nn.functional as F
+
+    with torch.no_grad():
+        x_t = torch.tensor(np.asarray(x, dtype=np.float32)).unsqueeze(0)
+        logits = model(x_t)
+        probs = F.softmax(logits, dim=1).squeeze(0)
+        return probs.cpu().numpy().astype(np.float32)
+
+
 def extract_flat_weights(model: "nn.Module"):
     """Flatten a feed-forward model's weights in the order the GN tree
     iterates connection curves: for each Linear layer in sequence, for each
@@ -141,6 +178,7 @@ class EpochTrainer:
 
         self.epochs = epochs
         self.device = _pick_device()
+        self.layer_sizes = list(layer_sizes)
 
         x, y = _load_dataset(dataset_path)
         if x.shape[1] != layer_sizes[0]:

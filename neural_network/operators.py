@@ -149,7 +149,8 @@ class NN_OT_load_sample(bpy.types.Operator):
             )
             return {"CANCELLED"}
 
-        sample = np.asarray(X[self.sample_index]).flatten().astype(np.float32)
+        raw_sample = np.asarray(X[self.sample_index]).flatten().astype(np.float32)
+        sample = raw_sample.copy()
         input_size = len(sample)
 
         try:
@@ -179,10 +180,45 @@ class NN_OT_load_sample(bpy.types.Operator):
         values = np.zeros(len(mesh.vertices), dtype=np.float32)
         values[:input_size] = sample
         attr.data.foreach_set("value", values)
+
+        out_msg = ""
+        try:
+            from . import nn_training, training_operator
+
+            model_path = training_operator.model_path_for_dataset(path)
+            if not os.path.exists(model_path):
+                self.report({"WARNING"}, f"No model at {model_path}. Train first.")
+            elif not nn_training.has_torch():
+                self.report({"WARNING"}, "PyTorch not available for prediction.")
+            else:
+                model, layer_sizes = nn_training.load_model(model_path)
+                if not layer_sizes or layer_sizes[0] != input_size:
+                    self.report(
+                        {"WARNING"},
+                        f"Model input size {layer_sizes[0] if layer_sizes else '?'} "
+                        f"!= current Input Size {input_size}.",
+                    )
+                else:
+                    probs = nn_training.predict(model, raw_sample[:layer_sizes[0]])
+                    out_attr = mesh.attributes.get(tree_builder.OUTPUT_ATTRIBUTE)
+                    if out_attr is None:
+                        out_attr = mesh.attributes.new(
+                            name=tree_builder.OUTPUT_ATTRIBUTE,
+                            type="FLOAT",
+                            domain="POINT",
+                        )
+                    out_values = np.zeros(len(mesh.vertices), dtype=np.float32)
+                    out_values[: len(probs)] = probs
+                    out_attr.data.foreach_set("value", out_values)
+                    pred_class = int(np.argmax(probs))
+                    out_msg = f", predicted {pred_class} (p={float(probs[pred_class]):.2f})"
+        except Exception as exc:
+            self.report({"WARNING"}, f"Prediction failed: {exc}")
+
         mesh.update()
         obj.update_tag(refresh={"DATA"})
 
-        self.report({"INFO"}, f"Loaded sample {self.sample_index}")
+        self.report({"INFO"}, f"Loaded sample {self.sample_index}{out_msg}")
         return {"FINISHED"}
 
 

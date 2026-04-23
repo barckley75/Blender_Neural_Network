@@ -15,6 +15,7 @@ import bpy
 NODE_GROUP_NAME = "NeuralNetwork"
 WEIGHT_ATTRIBUTE = "nn_weight"
 INPUT_ATTRIBUTE = "nn_input"
+OUTPUT_ATTRIBUTE = "nn_output"
 INPUT_PIXEL_ATTRIBUTE = "nn_input_pixel"
 INPUT_MATERIAL_NAME = "NN_InputColor"
 
@@ -136,8 +137,8 @@ def _build_layer(
     aspect_socket: str,
     mesh_size_socket: str,
     y_offset: float,
-    is_input_layer: bool = False,
-    input_material: bpy.types.Material | None = None,
+    source_attribute: str | None = None,
+    emission_material: bpy.types.Material | None = None,
 ) -> tuple[bpy.types.NodeSocket, bpy.types.NodeSocket]:
     out_in = group_input.outputs
 
@@ -267,14 +268,14 @@ def _build_layer(
 
     instances_out: bpy.types.NodeSocket = iop.outputs["Instances"]
 
-    if is_input_layer:
+    if source_attribute is not None:
         pix_idx = _new(group, "GeometryNodeInputIndex", f"{size_socket} PIdx",
                        (2200, y_offset - 500))
 
         pix_attr = _new(group, "GeometryNodeInputNamedAttribute", f"{size_socket} PixAttr",
                         (2200, y_offset - 650))
         pix_attr.data_type = "FLOAT"
-        pix_attr.inputs["Name"].default_value = INPUT_ATTRIBUTE
+        pix_attr.inputs["Name"].default_value = source_attribute
 
         sample_pix = _new(group, "GeometryNodeSampleIndex", f"{size_socket} SampPix",
                           (2400, y_offset - 550))
@@ -299,11 +300,11 @@ def _build_layer(
 
     geom_out: bpy.types.NodeSocket = realize.outputs[0]
 
-    if is_input_layer and input_material is not None:
+    if source_attribute is not None and emission_material is not None:
         set_mat = _new(group, "GeometryNodeSetMaterial", f"{size_socket} Mat",
                        (3000, y_offset))
         _link(group, realize.outputs[0], set_mat.inputs["Geometry"])
-        set_mat.inputs["Material"].default_value = input_material
+        set_mat.inputs["Material"].default_value = emission_material
         geom_out = set_mat.outputs["Geometry"]
 
     return geom_out, set_pos.outputs["Geometry"]
@@ -545,6 +546,13 @@ def build_tree(hidden_count: int = DEFAULT_HIDDEN_COUNT) -> bpy.types.NodeTree:
         else:
             aspect_socket, mesh_size_socket = "Hidden Aspect", "Hidden Mesh Size"
 
+        if name == "Input":
+            source_attr = INPUT_ATTRIBUTE
+        elif name == "Output":
+            source_attr = OUTPUT_ATTRIBUTE
+        else:
+            source_attr = None
+
         geo_out, pts_out = _build_layer(
             group,
             group_input,
@@ -554,8 +562,8 @@ def build_tree(hidden_count: int = DEFAULT_HIDDEN_COUNT) -> bpy.types.NodeTree:
             aspect_socket=aspect_socket,
             mesh_size_socket=mesh_size_socket,
             y_offset=-i * 1000,
-            is_input_layer=(name == "Input"),
-            input_material=input_material if name == "Input" else None,
+            source_attribute=source_attr,
+            emission_material=input_material if source_attr is not None else None,
         )
         layer_geo_outputs.append(geo_out)
         layer_point_outputs.append(pts_out)

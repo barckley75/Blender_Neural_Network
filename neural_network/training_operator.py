@@ -1,3 +1,5 @@
+import os
+
 import bpy
 
 from . import tree_builder
@@ -17,6 +19,21 @@ def _layer_sizes_from_modifier(mod) -> list[int]:
     return sizes
 
 
+def model_path_for_dataset(dataset_path: str) -> str:
+    abs_path = bpy.path.abspath(dataset_path)
+    base, _ext = os.path.splitext(abs_path)
+    return base + ".nnmodel.pt"
+
+
+def _save_trained_model(trainer, dataset_path: str) -> None:
+    from . import nn_training
+
+    path = model_path_for_dataset(dataset_path)
+    if not path:
+        return
+    nn_training.save_model(trainer.model, trainer.layer_sizes, path)
+
+
 def _push_weights_to_object(obj, trainer) -> tuple[int, float]:
     """Replace obj's mesh with one carrying an 'nn_weight' per-point attribute.
     Returns (weight_count, max_abs) for UI reporting."""
@@ -30,12 +47,17 @@ def _push_weights_to_object(obj, trainer) -> tuple[int, float]:
         return 0, 0.0
 
     preserved_input: "np.ndarray | None" = None
+    preserved_output: "np.ndarray | None" = None
     old_mesh = obj.data
     if old_mesh is not None:
         old_attr = old_mesh.attributes.get(tree_builder.INPUT_ATTRIBUTE)
         if old_attr is not None and len(old_attr.data) > 0:
             preserved_input = np.zeros(len(old_attr.data), dtype=np.float32)
             old_attr.data.foreach_get("value", preserved_input)
+        old_out = old_mesh.attributes.get(tree_builder.OUTPUT_ATTRIBUTE)
+        if old_out is not None and len(old_out.data) > 0:
+            preserved_output = np.zeros(len(old_out.data), dtype=np.float32)
+            old_out.data.foreach_get("value", preserved_output)
 
     mesh = bpy.data.meshes.new(f"{obj.name}_weights")
     mesh.vertices.add(n)
@@ -52,6 +74,15 @@ def _push_weights_to_object(obj, trainer) -> tuple[int, float]:
         copy_n = min(n, preserved_input.size)
         values[:copy_n] = preserved_input[:copy_n]
         in_attr.data.foreach_set("value", values)
+
+    if preserved_output is not None:
+        out_attr_new = mesh.attributes.new(
+            name=tree_builder.OUTPUT_ATTRIBUTE, type="FLOAT", domain="POINT"
+        )
+        values = np.zeros(n, dtype=np.float32)
+        copy_n = min(n, preserved_output.size)
+        values[:copy_n] = preserved_output[:copy_n]
+        out_attr_new.data.foreach_set("value", values)
 
     mesh.update()
 
@@ -161,6 +192,10 @@ class NN_OT_train(bpy.types.Operator):
                         )
                 except Exception as exc:
                     print(f"[NN] weight push failed: {exc}")
+            try:
+                _save_trained_model(self._trainer, self._settings.dataset_path)
+            except Exception as exc:
+                print(f"[NN] model save failed: {exc}")
             return self._cleanup(context, cancelled=False)
 
         epoch, loss, acc = result
@@ -193,7 +228,67 @@ class NN_OT_stop_training(bpy.types.Operator):
         return {"FINISHED"}
 
 
-_classes = (NN_OT_train, NN_OT_stop_training)
+class NN_OT_play_samples(bpy.types.Operator):
+    """Cycle through dataset samples on a timer."""
+
+    bl_idname = "nn.play_samples"
+    bl_label = "Play Samples"
+    bl_options = {"REGISTER"}
+
+    _timer = None
+
+    @classmethod
+    def poll(cls, context):
+        return get_nn_modifier(context.active_object) is not None
+
+    def execute(self, context):
+        settings = context.scene.nn_training
+        if settings.is_playing:
+            return {"CANCELLED"}
+        settings.is_playing = True
+        wm = context.window_manager
+        self._timer = wm.event_timer_add(
+            max(0.05, float(settings.play_interval)), window=context.window
+        )
+        wm.modal_handler_add(self)
+        return {"RUNNING_MODAL"}
+
+    def modal(self, context, event):
+        settings = context.scene.nn_training
+        if event.type == "ESC" or not settings.is_playing:
+            return self._cleanup(context)
+        if event.type != "TIMER":
+            return {"PASS_THROUGH"}
+
+        settings.sample_index = settings.sample_index + 1
+        try:
+            bpy.ops.nn.load_sample(sample_index=settings.sample_index)
+        except Exception as exc:
+            self.report({"WARNING"}, f"Play aborted: {exc}")
+            return self._cleanup(context)
+        return {"RUNNING_MODAL"}
+
+    def _cleanup(self, context):
+        wm = context.window_manager
+        if self._timer is not None:
+            wm.event_timer_remove(self._timer)
+            self._timer = None
+        context.scene.nn_training.is_playing = False
+        return {"CANCELLED"}
+
+
+class NN_OT_stop_playing(bpy.types.Operator):
+    """Stop the sample-playback timer."""
+
+    bl_idname = "nn.stop_playing"
+    bl_label = "Stop"
+
+    def execute(self, context):
+        context.scene.nn_training.is_playing = False
+        return {"FINISHED"}
+
+
+_classes = (NN_OT_train, NN_OT_stop_training, NN_OT_play_samples, NN_OT_stop_playing)
 
 
 def register():
