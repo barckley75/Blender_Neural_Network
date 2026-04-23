@@ -6,6 +6,10 @@ Create and train artificial neural networks inside Blender, visualized as 3D geo
 
 ## Gallery
 
+![Deep network](files/Screenshot_5.png)
+
+This version lets you add hidden layers dynamically — pick any count in the *Tree Structure* panel and hit **Rebuild Tree**; the node group is regenerated on the fly with that many hidden layers, and the size / grid sub-panels adapt to whatever the tree has.
+
 | | |
 |---|---|
 | ![Panel](files/Screenshot_1.png) | ![Network](files/Screenshot_2.png) |
