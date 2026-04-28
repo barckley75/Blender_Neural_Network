@@ -1,2 +1,4 @@
 torch>=2.2
+torchvision>=0.17
 numpy>=1.26
+certifi
