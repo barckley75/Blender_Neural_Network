@@ -1,33 +1,17 @@
-import os
-
 import bpy
 
 from . import tree_builder
 
 NODE_GROUP_NAME = tree_builder.NODE_GROUP_NAME
-BUNDLED_BLEND = "NeuralNetwork.blend"
 NN_MARKER_PROP = "is_neural_network"
 
 
-def _bundled_blend_path() -> str:
-    return os.path.join(os.path.dirname(__file__), BUNDLED_BLEND)
-
-
-def _append_node_group() -> bpy.types.NodeTree | None:
+def _ensure_node_group() -> bpy.types.NodeTree:
+    """Return the NeuralNetwork node group, building it on demand if needed."""
     existing = bpy.data.node_groups.get(NODE_GROUP_NAME)
     if existing is not None:
         return existing
-
-    blend_path = _bundled_blend_path()
-    if not os.path.exists(blend_path):
-        return None
-
-    with bpy.data.libraries.load(blend_path, link=False) as (data_from, data_to):
-        if NODE_GROUP_NAME not in data_from.node_groups:
-            return None
-        data_to.node_groups = [NODE_GROUP_NAME]
-
-    return bpy.data.node_groups.get(NODE_GROUP_NAME)
+    return tree_builder.build_tree()
 
 
 def get_nn_modifier(obj: bpy.types.Object | None) -> bpy.types.Modifier | None:
@@ -66,14 +50,10 @@ class NN_OT_create(bpy.types.Operator):
 
     def execute(self, context):
         tree_builder.ensure_input_material()
-        node_group = _append_node_group()
-        if node_group is None:
-            self.report(
-                {"ERROR"},
-                f"Could not find '{NODE_GROUP_NAME}' node group. "
-                f"Run build_gn_tree.py inside Blender to generate '{BUNDLED_BLEND}' "
-                "and place it next to this addon.",
-            )
+        try:
+            node_group = _ensure_node_group()
+        except Exception as exc:
+            self.report({"ERROR"}, f"Failed to build Neural Network node group: {exc}")
             return {"CANCELLED"}
 
         mesh = bpy.data.meshes.new("NeuralNetwork")

@@ -3,8 +3,8 @@
 Run via:
     blender --background --python tests/test_bootstrap.py
 
-Expects `neural_network/NeuralNetwork.blend` to exist (run build_gn_tree.py
-first if it does not).
+The node group is built on demand by the operator, so no bundled .blend
+is required.
 """
 
 from __future__ import annotations
@@ -24,10 +24,6 @@ def fail(msg: str) -> None:
 
 
 def main() -> None:
-    bundled = os.path.join(REPO_ROOT, "neural_network", "NeuralNetwork.blend")
-    if not os.path.exists(bundled):
-        fail(f"Missing bundled blend: {bundled}. Run build_gn_tree.py first.")
-
     import neural_network
     neural_network.register()
 

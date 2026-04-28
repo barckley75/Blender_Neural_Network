@@ -1,10 +1,7 @@
-import os
-
 import bpy
 
 from . import tree_builder
 from .operators import (
-    BUNDLED_BLEND,
     NODE_GROUP_NAME,
     get_nn_modifier,
     modifier_input_path,
@@ -50,17 +47,10 @@ class VIEW3D_PT_NN_main(_NNTabBase, bpy.types.Panel):
         if mod is not None:
             layout.label(text=f"Active: {context.active_object.name}", icon="CHECKMARK")
             layout.operator("nn.create", text="Add Another", icon="ADD")
-        elif group is not None:
-            layout.label(text="Node group loaded. Add an object:")
-            layout.operator("nn.create", text="Add Neural Network", icon="NODETREE")
         else:
-            blend_path = os.path.join(os.path.dirname(__file__), BUNDLED_BLEND)
-            if os.path.exists(blend_path):
-                layout.label(text="Node group not yet loaded.")
-                layout.operator("nn.create", text="Add Neural Network", icon="NODETREE")
-            else:
-                layout.label(text="No bundled .blend found.", icon="INFO")
-                layout.label(text="Use Rebuild Tree below to generate one.")
+            if group is None:
+                layout.label(text="Node group will be built on first add.")
+            layout.operator("nn.create", text="Add Neural Network", icon="NODETREE")
 
         box = layout.box()
         box.label(text="Tree Structure", icon="NODETREE")

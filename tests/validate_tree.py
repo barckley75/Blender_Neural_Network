@@ -1,17 +1,22 @@
 """Validates the NeuralNetwork node group.
 
 Run via:
-    blender --background neural_network/NeuralNetwork.blend \\
-            --python tests/validate_tree.py
+    blender --background --python tests/validate_tree.py
 
-Exits with nonzero status if any assertion fails. Safe to run in CI.
+Builds the node group from Python if it is not already present in the
+file, then asserts the socket interface. Exits with nonzero status if
+any assertion fails. Safe to run in CI.
 """
 
 from __future__ import annotations
 
+import os
 import sys
 
 import bpy
+
+REPO_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+sys.path.insert(0, REPO_ROOT)
 
 NODE_GROUP_NAME = "NeuralNetwork"
 
@@ -41,7 +46,9 @@ def fail(msg: str) -> None:
 def main() -> None:
     group = bpy.data.node_groups.get(NODE_GROUP_NAME)
     if group is None:
-        fail(f"Node group '{NODE_GROUP_NAME}' not found in .blend")
+        from neural_network import tree_builder
+
+        group = tree_builder.build_tree()
 
     if group.bl_idname != "GeometryNodeTree":
         fail(f"Node group type is {group.bl_idname}, expected GeometryNodeTree")
