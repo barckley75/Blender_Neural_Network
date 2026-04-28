@@ -1,7 +1,7 @@
 bl_info = {
     "name": "Artificial Neural Network",
     "author": "Ivo Vacca",
-    "version": (1, 0, 0),
+    "version": (2, 3, 0),
     "blender": (5, 1, 0),
     "location": "View3D > Sidebar > NN",
     "description": "Visualize and train neural networks in Blender using Geometry Nodes and PyTorch.",

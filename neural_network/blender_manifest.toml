@@ -1,7 +1,7 @@
 schema_version = "1.0.0"
 
 id = "neural_network"
-version = "1.0.0"
+version = "2.3.0"
 name = "Artificial Neural Network"
 tagline = "Visualize and train neural networks with Geometry Nodes and PyTorch"
 maintainer = "Ivo Vacca"
