@@ -16,8 +16,17 @@ NODE_GROUP_NAME = "NeuralNetwork"
 WEIGHT_ATTRIBUTE = "nn_weight"
 INPUT_ATTRIBUTE = "nn_input"
 OUTPUT_ATTRIBUTE = "nn_output"
+HIDDEN_ATTRIBUTE_PREFIX = "nn_hidden_"
 INPUT_PIXEL_ATTRIBUTE = "nn_input_pixel"
 INPUT_MATERIAL_NAME = "NN_InputColor"
+
+
+def hidden_attribute_name(layer_name: str) -> str:
+    """Per-mesh-vertex attribute name a hidden layer reads its activations from.
+
+    For layer name "L1" → "nn_hidden_L1".
+    """
+    return f"{HIDDEN_ATTRIBUTE_PREFIX}{layer_name}"
 
 DEFAULT_HIDDEN_COUNT = 3
 MAX_HIDDEN_COUNT = 32
@@ -551,7 +560,7 @@ def build_tree(hidden_count: int = DEFAULT_HIDDEN_COUNT) -> bpy.types.NodeTree:
         elif name == "Output":
             source_attr = OUTPUT_ATTRIBUTE
         else:
-            source_attr = None
+            source_attr = hidden_attribute_name(name)
 
         geo_out, pts_out = _build_layer(
             group,

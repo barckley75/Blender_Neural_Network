@@ -179,7 +179,28 @@ class NN_OT_load_sample(bpy.types.Operator):
                         f"!= current Input Size {input_size}.",
                     )
                 else:
-                    probs = nn_training.predict(model, raw_sample[:layer_sizes[0]])
+                    probs, hidden_acts = nn_training.predict_with_activations(
+                        model, raw_sample[: layer_sizes[0]]
+                    )
+
+                    needed = max(layer_sizes)
+                    if len(mesh.vertices) < needed:
+                        mesh.vertices.add(needed - len(mesh.vertices))
+
+                    for i, acts in enumerate(hidden_acts):
+                        layer_name = f"L{i + 1}"
+                        attr_name = tree_builder.hidden_attribute_name(layer_name)
+                        h_attr = mesh.attributes.get(attr_name)
+                        if h_attr is None:
+                            h_attr = mesh.attributes.new(
+                                name=attr_name, type="FLOAT", domain="POINT"
+                            )
+                        max_a = float(acts.max()) if acts.size else 0.0
+                        norm = (acts / max_a) if max_a > 0.0 else acts
+                        h_values = np.zeros(len(mesh.vertices), dtype=np.float32)
+                        h_values[: len(norm)] = norm
+                        h_attr.data.foreach_set("value", h_values)
+
                     out_attr = mesh.attributes.get(tree_builder.OUTPUT_ATTRIBUTE)
                     if out_attr is None:
                         out_attr = mesh.attributes.new(

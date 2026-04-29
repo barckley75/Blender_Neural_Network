@@ -62,16 +62,34 @@ def load_model(path: str) -> tuple["nn.Module", list[int]]:
 def predict(model: "nn.Module", x):
     """Forward pass + softmax. x is a 1D float array; returns a 1D numpy array
     of probabilities summing to 1."""
+    probs, _ = predict_with_activations(model, x)
+    return probs
+
+
+def predict_with_activations(model: "nn.Module", x):
+    """Forward pass + softmax that also captures hidden-layer activations.
+
+    Returns (probs, hidden_activations) where:
+    - probs is a 1D numpy float32 array (post-softmax, sums to 1).
+    - hidden_activations is a list of 1D numpy float32 arrays — one per
+      ReLU output in the model. For [784, 100, 10] this is a single
+      100-vector; for [784, 100, 50, 10] it would be two arrays.
+      Empty list if there are no hidden layers (direct input→output).
+    """
     if not _TORCH_AVAILABLE:
         raise RuntimeError("PyTorch not installed")
     import numpy as np
     import torch.nn.functional as F
 
     with torch.no_grad():
-        x_t = torch.tensor(np.asarray(x, dtype=np.float32)).unsqueeze(0)
-        logits = model(x_t)
-        probs = F.softmax(logits, dim=1).squeeze(0)
-        return probs.cpu().numpy().astype(np.float32)
+        h = torch.tensor(np.asarray(x, dtype=np.float32)).unsqueeze(0)
+        hidden: list = []
+        for layer in model:
+            h = layer(h)
+            if isinstance(layer, nn.ReLU):
+                hidden.append(h.squeeze(0).cpu().numpy().astype(np.float32))
+        probs = F.softmax(h, dim=1).squeeze(0).cpu().numpy().astype(np.float32)
+        return probs, hidden
 
 
 def extract_flat_weights(model: "nn.Module"):
