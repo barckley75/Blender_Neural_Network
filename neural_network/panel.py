@@ -80,7 +80,7 @@ class VIEW3D_PT_NN_aspect(_NNPanelBase, bpy.types.Panel):
         layout = self.layout
 
         col = layout.column(align=True)
-        col.label(text="Aspect (0=Ico, 1=Sphere, 2=Cube)")
+        col.label(text="Aspect (0=Ico, 1=Sphere, 2=Cube, 3=Plane)")
         _draw_mod_prop(col, mod, "Input Aspect", "Input")
         _draw_mod_prop(col, mod, "Hidden Aspect", "Hidden")
         _draw_mod_prop(col, mod, "Output Aspect", "Output")
@@ -100,7 +100,9 @@ class VIEW3D_PT_NN_aspect(_NNPanelBase, bpy.types.Panel):
         col = layout.column(align=True)
         col.label(text="Spacing")
         _draw_mod_prop(col, mod, "Layer Spacing", "Layer")
-        _draw_mod_prop(col, mod, "Neuron Spacing", "Neuron")
+        _draw_mod_prop(col, mod, "Input Neuron Spacing", "Input Neurons")
+        _draw_mod_prop(col, mod, "Hidden Neuron Spacing", "Hidden Neurons")
+        _draw_mod_prop(col, mod, "Output Neuron Spacing", "Output Neurons")
 
 
 class VIEW3D_PT_NN_size(_NNPanelBase, bpy.types.Panel):

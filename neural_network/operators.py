@@ -49,7 +49,7 @@ class NN_OT_create(bpy.types.Operator):
     bl_options = {"REGISTER", "UNDO"}
 
     def execute(self, context):
-        tree_builder.ensure_input_material()
+        tree_builder.ensure_layer_materials()
         try:
             node_group = _ensure_node_group()
         except Exception as exc:

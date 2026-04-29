@@ -18,7 +18,11 @@ INPUT_ATTRIBUTE = "nn_input"
 OUTPUT_ATTRIBUTE = "nn_output"
 HIDDEN_ATTRIBUTE_PREFIX = "nn_hidden_"
 INPUT_PIXEL_ATTRIBUTE = "nn_input_pixel"
+
 INPUT_MATERIAL_NAME = "NN_InputColor"
+HIDDEN_MATERIAL_NAME = "NN_HiddenColor"
+OUTPUT_MATERIAL_NAME = "NN_OutputColor"
+CONNECTION_MATERIAL_NAME = "NN_ConnectionColor"
 
 
 def hidden_attribute_name(layer_name: str) -> str:
@@ -32,16 +36,29 @@ DEFAULT_HIDDEN_COUNT = 3
 MAX_HIDDEN_COUNT = 32
 
 
-def ensure_input_material() -> bpy.types.Material:
-    """Create (or return) the emission material used by input-layer neurons.
+def _ensure_emission_material(
+    name: str,
+    base_color: tuple[float, float, float],
+    drives_strength: bool = True,
+) -> bpy.types.Material:
+    """Create (or return) a layered emission material.
 
-    The material emits white light scaled by the per-neuron attribute
-    `nn_input_pixel`. Values in [0, 1] → black (off) to white (bright).
+    For neurons (drives_strength=True): the per-instance `nn_input_pixel` value
+    is power-curved (pow 1.8) so active neurons stand out from quiet ones,
+    then routed through a 3-stop color ramp (black → base_color → white) for
+    emission color, and multiplied by 3.0 for emission strength. Result:
+    silent neurons are black, mid-firing neurons take on the layer's base
+    color, fully-firing neurons go white-hot.
+
+    For connections (drives_strength=False): a Fresnel-modulated emission of
+    `base_color` — slightly brighter at glancing angles so the curves read as
+    glowing fibers rather than flat tubes. Constant in time; the trained
+    weight magnitude is already conveyed by line thickness.
     """
-    mat = bpy.data.materials.get(INPUT_MATERIAL_NAME)
+    mat = bpy.data.materials.get(name)
     if mat is not None:
         return mat
-    mat = bpy.data.materials.new(INPUT_MATERIAL_NAME)
+    mat = bpy.data.materials.new(name)
     mat.use_fake_user = True
     mat.use_nodes = True
     nt = mat.node_tree
@@ -49,19 +66,81 @@ def ensure_input_material() -> bpy.types.Material:
         nt.nodes.remove(n)
 
     output = nt.nodes.new("ShaderNodeOutputMaterial")
-    output.location = (400, 0)
+    output.location = (1200, 0)
 
     emission = nt.nodes.new("ShaderNodeEmission")
-    emission.location = (200, 0)
-    emission.inputs["Color"].default_value = (1.0, 1.0, 1.0, 1.0)
+    emission.location = (1000, 0)
 
-    attr = nt.nodes.new("ShaderNodeAttribute")
-    attr.attribute_name = INPUT_PIXEL_ATTRIBUTE
-    attr.location = (0, 0)
+    if drives_strength:
+        attr = nt.nodes.new("ShaderNodeAttribute")
+        attr.attribute_name = INPUT_PIXEL_ATTRIBUTE
+        attr.location = (0, 0)
 
-    nt.links.new(attr.outputs["Fac"], emission.inputs["Strength"])
+        power = nt.nodes.new("ShaderNodeMath")
+        power.operation = "POWER"
+        power.location = (200, 0)
+        power.inputs[1].default_value = 1.8
+        nt.links.new(attr.outputs["Fac"], power.inputs[0])
+
+        ramp = nt.nodes.new("ShaderNodeValToRGB")
+        ramp.location = (400, 100)
+        elements = ramp.color_ramp.elements
+        elements[0].position = 0.0
+        elements[0].color = (0.0, 0.0, 0.0, 1.0)
+        elements[1].position = 1.0
+        elements[1].color = (1.0, 1.0, 1.0, 1.0)
+        mid = elements.new(0.5)
+        mid.color = (*base_color, 1.0)
+        nt.links.new(power.outputs[0], ramp.inputs["Fac"])
+        nt.links.new(ramp.outputs["Color"], emission.inputs["Color"])
+
+        strength_mul = nt.nodes.new("ShaderNodeMath")
+        strength_mul.operation = "MULTIPLY"
+        strength_mul.location = (700, -200)
+        strength_mul.inputs[1].default_value = 3.0
+        nt.links.new(power.outputs[0], strength_mul.inputs[0])
+        nt.links.new(strength_mul.outputs[0], emission.inputs["Strength"])
+    else:
+        emission.inputs["Color"].default_value = (*base_color, 1.0)
+
+        fresnel = nt.nodes.new("ShaderNodeFresnel")
+        fresnel.location = (200, -200)
+        fresnel.inputs["IOR"].default_value = 1.45
+
+        rim_boost = nt.nodes.new("ShaderNodeMath")
+        rim_boost.operation = "MULTIPLY_ADD"
+        rim_boost.location = (500, -200)
+        rim_boost.inputs[1].default_value = 1.5
+        rim_boost.inputs[2].default_value = 0.6
+        nt.links.new(fresnel.outputs[0], rim_boost.inputs[0])
+        nt.links.new(rim_boost.outputs[0], emission.inputs["Strength"])
+
     nt.links.new(emission.outputs[0], output.inputs["Surface"])
     return mat
+
+
+def ensure_layer_materials() -> dict[str, bpy.types.Material]:
+    """Create / return the four materials the GN tree assigns to layers + connections.
+
+    Each layer material is a 3-stop heatmap (black → base_color → white) driven
+    by the per-neuron activation, with a power curve that pushes contrast toward
+    the brightest neurons. Connections use Fresnel-modulated emission so the
+    edges of curves glow brighter than the center, giving them a fiber-optic feel.
+
+    All four are stored in the .blend with `use_fake_user = True` so they survive
+    save/load cycles. Users can edit any of them in the shader editor — change
+    the ramp colors, swap to Principled BSDF, add textures — and the tree picks
+    up the edits automatically. Existing materials are not overwritten on
+    re-run; delete a material if you want this function to regenerate it fresh.
+    """
+    return {
+        "input": _ensure_emission_material(INPUT_MATERIAL_NAME, (1.0, 1.0, 1.0)),
+        "hidden": _ensure_emission_material(HIDDEN_MATERIAL_NAME, (1.0, 0.5, 0.1)),
+        "output": _ensure_emission_material(OUTPUT_MATERIAL_NAME, (0.3, 0.8, 1.0)),
+        "connection": _ensure_emission_material(
+            CONNECTION_MATERIAL_NAME, (0.4, 0.4, 0.4), drives_strength=False
+        ),
+    }
 
 
 def _layer_names(hidden_count: int) -> list[str]:
@@ -79,9 +158,9 @@ def _build_interface_spec(hidden_count: int) -> list[tuple[str, str, object, obj
     sockets += [
         ("Output Size", "NodeSocketInt", 2, 1, 4096),
         ("Output Grid", "NodeSocketInt", 1, 1, 128),
-        ("Input Aspect", "NodeSocketInt", 0, 0, 2),
-        ("Hidden Aspect", "NodeSocketInt", 1, 0, 2),
-        ("Output Aspect", "NodeSocketInt", 0, 0, 2),
+        ("Input Aspect", "NodeSocketInt", 0, 0, 3),
+        ("Hidden Aspect", "NodeSocketInt", 1, 0, 3),
+        ("Output Aspect", "NodeSocketInt", 0, 0, 3),
         ("Input Mesh Size", "NodeSocketFloat", 0.3, 0.001, 10.0),
         ("Hidden Mesh Size", "NodeSocketFloat", 0.3, 0.001, 10.0),
         ("Output Mesh Size", "NodeSocketFloat", 0.3, 0.001, 10.0),
@@ -89,7 +168,9 @@ def _build_interface_spec(hidden_count: int) -> list[tuple[str, str, object, obj
         ("Connection Radius", "NodeSocketFloat", 0.3, 0.0, 100.0),
         ("Weight Scale", "NodeSocketFloat", 0.0, 0.0, 1.0),
         ("Layer Spacing", "NodeSocketFloat", 5.0, 0.5, 1000.0),
-        ("Neuron Spacing", "NodeSocketFloat", 1.0, 0.5, 1000.0),
+        ("Input Neuron Spacing", "NodeSocketFloat", 1.0, 0.5, 1000.0),
+        ("Hidden Neuron Spacing", "NodeSocketFloat", 1.0, 0.5, 1000.0),
+        ("Output Neuron Spacing", "NodeSocketFloat", 1.0, 0.5, 1000.0),
     ]
     return sockets
 
@@ -145,6 +226,7 @@ def _build_layer(
     grid_socket: str,
     aspect_socket: str,
     mesh_size_socket: str,
+    neuron_spacing_socket: str,
     y_offset: float,
     source_attribute: str | None = None,
     emission_material: bpy.types.Material | None = None,
@@ -178,13 +260,13 @@ def _build_layer(
                   (800, y_offset + 100))
     size_x.operation = "MULTIPLY"
     _link(group, spacing_minus_one_w.outputs[0], size_x.inputs[0])
-    _link(group, out_in["Neuron Spacing"], size_x.inputs[1])
+    _link(group, out_in[neuron_spacing_socket], size_x.inputs[1])
 
     size_y = _new(group, "ShaderNodeMath", f"{size_socket} SizeY",
                   (800, y_offset))
     size_y.operation = "MULTIPLY"
     _link(group, spacing_minus_one_h.outputs[0], size_y.inputs[0])
-    _link(group, out_in["Neuron Spacing"], size_y.inputs[1])
+    _link(group, out_in[neuron_spacing_socket], size_y.inputs[1])
 
     grid = _new(group, "GeometryNodeMeshGrid", f"{size_socket} Grid",
                 (1000, y_offset))
@@ -253,15 +335,23 @@ def _build_layer(
                 (1800, y_offset + 200))
     cube.inputs["Size"].default_value = (1.5, 1.5, 1.5)
 
+    plane = _new(group, "GeometryNodeMeshGrid", f"{size_socket} Plane",
+                 (1800, y_offset + 100))
+    plane.inputs["Size X"].default_value = 1.5
+    plane.inputs["Size Y"].default_value = 1.5
+    plane.inputs["Vertices X"].default_value = 2
+    plane.inputs["Vertices Y"].default_value = 2
+
     aspect_switch = _new(group, "GeometryNodeIndexSwitch", f"{size_socket} AspectSwitch",
                          (2000, y_offset + 300))
     aspect_switch.data_type = "GEOMETRY"
-    while len(aspect_switch.index_switch_items) < 3:
+    while len(aspect_switch.index_switch_items) < 4:
         aspect_switch.index_switch_items.new()
     _link(group, out_in[aspect_socket], aspect_switch.inputs[0])
     _link(group, ico.outputs["Mesh"], aspect_switch.inputs[1])
     _link(group, uv_sphere.outputs["Mesh"], aspect_switch.inputs[2])
     _link(group, cube.outputs["Mesh"], aspect_switch.inputs[3])
+    _link(group, plane.outputs["Mesh"], aspect_switch.inputs[4])
 
     scale_vec = _new(group, "ShaderNodeCombineXYZ", f"{size_socket} Scale",
                      (2000, y_offset))
@@ -470,6 +560,7 @@ def _build_connections(
     group_input: bpy.types.Node,
     layer_point_outputs: list[bpy.types.NodeSocket],
     y_offset: float,
+    connection_material: bpy.types.Material | None = None,
 ) -> bpy.types.NodeSocket:
     curve_outputs: list[bpy.types.NodeSocket] = []
 
@@ -502,7 +593,14 @@ def _build_connections(
     for c in curve_outputs:
         _link(group, c, join.inputs[0])
 
-    return join.outputs[0]
+    if connection_material is None:
+        return join.outputs[0]
+
+    set_mat = _new(group, "GeometryNodeSetMaterial", "Conn Mat",
+                   (5800, y_offset))
+    _link(group, join.outputs[0], set_mat.inputs["Geometry"])
+    set_mat.inputs["Material"].default_value = connection_material
+    return set_mat.outputs["Geometry"]
 
 
 def discover_hidden_count(group: bpy.types.NodeTree) -> int:
@@ -530,7 +628,7 @@ def build_tree(hidden_count: int = DEFAULT_HIDDEN_COUNT) -> bpy.types.NodeTree:
     if hidden_count > MAX_HIDDEN_COUNT:
         raise ValueError(f"hidden_count must be <= {MAX_HIDDEN_COUNT}")
 
-    input_material = ensure_input_material()
+    materials = ensure_layer_materials()
 
     group = bpy.data.node_groups.get(NODE_GROUP_NAME)
     if group is None:
@@ -549,18 +647,23 @@ def build_tree(hidden_count: int = DEFAULT_HIDDEN_COUNT) -> bpy.types.NodeTree:
         size_socket = f"{name} Size"
         grid_socket = f"{name} Grid"
         if name == "Input":
-            aspect_socket, mesh_size_socket = "Input Aspect", "Input Mesh Size"
-        elif name == "Output":
-            aspect_socket, mesh_size_socket = "Output Aspect", "Output Mesh Size"
-        else:
-            aspect_socket, mesh_size_socket = "Hidden Aspect", "Hidden Mesh Size"
-
-        if name == "Input":
+            aspect_socket = "Input Aspect"
+            mesh_size_socket = "Input Mesh Size"
+            neuron_spacing_socket = "Input Neuron Spacing"
             source_attr = INPUT_ATTRIBUTE
+            layer_material = materials["input"]
         elif name == "Output":
+            aspect_socket = "Output Aspect"
+            mesh_size_socket = "Output Mesh Size"
+            neuron_spacing_socket = "Output Neuron Spacing"
             source_attr = OUTPUT_ATTRIBUTE
+            layer_material = materials["output"]
         else:
+            aspect_socket = "Hidden Aspect"
+            mesh_size_socket = "Hidden Mesh Size"
+            neuron_spacing_socket = "Hidden Neuron Spacing"
             source_attr = hidden_attribute_name(name)
+            layer_material = materials["hidden"]
 
         geo_out, pts_out = _build_layer(
             group,
@@ -570,9 +673,10 @@ def build_tree(hidden_count: int = DEFAULT_HIDDEN_COUNT) -> bpy.types.NodeTree:
             grid_socket=grid_socket,
             aspect_socket=aspect_socket,
             mesh_size_socket=mesh_size_socket,
+            neuron_spacing_socket=neuron_spacing_socket,
             y_offset=-i * 1000,
             source_attribute=source_attr,
-            emission_material=input_material if source_attr is not None else None,
+            emission_material=layer_material,
         )
         layer_geo_outputs.append(geo_out)
         layer_point_outputs.append(pts_out)
@@ -584,7 +688,11 @@ def build_tree(hidden_count: int = DEFAULT_HIDDEN_COUNT) -> bpy.types.NodeTree:
 
     if len(layer_point_outputs) >= 2:
         conn_geo = _build_connections(
-            group, group_input, layer_point_outputs, y_offset=-5500
+            group,
+            group_input,
+            layer_point_outputs,
+            y_offset=-5500,
+            connection_material=materials["connection"],
         )
         visibility_switch = _new(group, "GeometryNodeSwitch", "Conn Visibility Switch",
                                  (5900, -2500))

@@ -34,7 +34,9 @@ FIXED_INPUT_SOCKETS = [
     ("Connection Visibility", "NodeSocketBool"),
     ("Connection Radius", "NodeSocketFloat"),
     ("Layer Spacing", "NodeSocketFloat"),
-    ("Neuron Spacing", "NodeSocketFloat"),
+    ("Input Neuron Spacing", "NodeSocketFloat"),
+    ("Hidden Neuron Spacing", "NodeSocketFloat"),
+    ("Output Neuron Spacing", "NodeSocketFloat"),
 ]
 
 
