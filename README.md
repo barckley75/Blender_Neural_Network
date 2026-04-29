@@ -53,7 +53,7 @@ With the path substituted, on macOS that becomes, for example:
 "/Applications/Blender.app/Contents/Resources/5.1/python/bin/python3.13" scripts/prepare_mnist.py
 ```
 
-This downloads the 70k handwritten-digit dataset and writes [datasets/mnist.npz](datasets/) in the format the addon expects. Takes ~30 seconds.
+This downloads the 70k handwritten-digit dataset and writes `datasets/mnist.npz` (created in your local repo, gitignored) in the format the addon expects. Takes ~30 seconds.
 
 ### D. Install the addon
 
