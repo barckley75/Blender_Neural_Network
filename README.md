@@ -6,6 +6,15 @@ Create and train artificial neural networks inside Blender, visualized as 3D geo
 
 Targeting **Blender 5.1+** with **Geometry Nodes** and **PyTorch**. The 2021 version that used Animation Nodes + TensorFlow is still in the git history; this one is a clean-sheet rewrite.
 
+## What you'll see
+
+After you train on a sample, every layer lights up with what the network is actually computing:
+
+- **Input layer** — colored by the digit's pixel intensities (the 28×28 MNIST canvas).
+- **Hidden layers** — colored by post-ReLU activations. Different neurons fire for different digits — you can see the network *thinking*.
+- **Output layer** — the brightest neuron is the predicted class.
+- **Connections** — line thickness encodes trained weight magnitude (strong weights = thick fibers).
+
 ---
 
 ## Quick start: train on MNIST in 5 minutes
@@ -128,10 +137,23 @@ This version lets you add hidden layers dynamically — pick any count in the *T
 In the 3D viewport sidebar (`N`), the **NN** tab has:
 
 - **Neural Network** — main panel; rebuild the tree with a custom hidden-layer count.
-- **Neurons Aspect** — mesh type (0=Ico, 1=Sphere, 2=Cube), mesh size, connection visibility/radius, layer + neuron spacing.
+- **Neurons Aspect** — mesh type per layer (**0=Ico, 1=Sphere, 2=Cube, 3=Plane**), mesh size, connection visibility / thickness, weight scale, and per-layer **Neuron Spacing** (separate for Input / Hidden / Output) and **Layer Spacing**. Plane is the cheapest geometry — useful for very wide layers like the 784-neuron MNIST input.
 - **Layer Sizes** — neuron count per layer (`Input`, `L1`, `L2`…, `Output`). Set a hidden layer to 0 to skip it.
 - **Grid** — how many columns to lay each layer into. Use 1 for a line; `sqrt(N)` for a square (28 for MNIST).
-- **Training (PyTorch)** — dataset path, epochs, minibatch, learning rate, **Start**. Once trained: **Show / Play** dataset samples through the network.
+- **Training (PyTorch)** — dataset path, epochs, minibatch, learning rate, **Start Training**. Once trained: **Show / Play** samples and watch the input, hidden, and output layers all light up.
+
+## Materials
+
+The addon creates four emission materials, all editable in the shader editor:
+
+| Material | What it colors | Default |
+|---|---|---|
+| `NN_InputColor` | Input-layer neurons | white |
+| `NN_HiddenColor` | All hidden-layer neurons | warm orange |
+| `NN_OutputColor` | Output-layer neurons | cool blue |
+| `NN_ConnectionColor` | Connection curves | dim gray + Fresnel rim |
+
+Each layer material is a 3-stop heatmap: silent neurons → black, mid-firing → the layer's base color, fully-firing → white-hot. Open any material in the shader editor and tweak the color ramp, the power curve, or swap in a Principled BSDF — the tree picks up edits live.
 
 ## Bring your own dataset
 
@@ -187,10 +209,10 @@ blender --background --python tests/test_bootstrap.py
 
 ## Status & roadmap
 
-This is the 1.0 Blender 5.1 rewrite. Known limitations:
+This is the Blender 5.1 rewrite. Known limitations:
 
-- Text-neuron aspect (old addon's option 2) is dropped; aspect 2 is now Cube.
-- Live activation visualization *during* training (color neurons by forward-pass magnitudes as each batch runs) is a planned stretch goal, not shipped. Post-training sample playback (Show / Play) does work today — input neurons light up with the digit and output neurons show the predicted class.
-- Performance with very large layers: the all-pairs connection generator scales as M × N per layer pair, so dense networks (e.g. 784 → 1024 → 1024) produce a lot of curve geometry. For MNIST-scale (784 → 100 → 10) it's fine on a laptop.
+- Text-neuron aspect (old addon's option 2) is dropped; aspect 2 is now Cube. Aspect 3 = Plane (new in v2.4).
+- Live activation visualization *during training* (recoloring neurons every batch as the network learns) is still on the roadmap. Post-training Show / Play works today and lights up input, hidden, and output layers.
+- Performance with very large layers: the all-pairs connection generator scales as M × N per layer pair, so dense networks (e.g. 784 → 1024 → 1024) produce a lot of curve geometry. Switching wide layers to **Aspect = 3 (Plane)** keeps it manageable. For MNIST-scale (784 → 100 → 10) it's fine on a laptop.
 
 Contributions welcome.
