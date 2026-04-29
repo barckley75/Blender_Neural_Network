@@ -53,7 +53,18 @@ With the path substituted, on macOS that becomes, for example:
 "/Applications/Blender.app/Contents/Resources/5.1/python/bin/python3.13" scripts/prepare_mnist.py
 ```
 
-This downloads the 70k handwritten-digit dataset and writes `datasets/mnist.npz` (created in your local repo, gitignored) in the format the addon expects. Takes ~30 seconds.
+The script connects to the internet, fetches MNIST from Amazon's mirror via `torchvision`, and writes everything into a new `datasets/` folder it creates inside your project. Takes ~30 seconds. You only need to do this once.
+
+After it finishes, you'll have:
+
+```
+<your-project-folder>/
+└── datasets/
+    ├── mnist.npz              ← point the Training panel at this file
+    └── _mnist_cache/MNIST/raw/   (raw MNIST .gz files, kept for re-runs)
+```
+
+Both folders are gitignored, so they stay on your machine and never get committed.
 
 ### D. Install the addon
 
