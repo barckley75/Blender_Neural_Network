@@ -46,6 +46,23 @@ In every command below, replace `<blender python>` with the path you got. Keep t
 
 This installs `torch`, `torchvision`, `numpy`, and `certifi` (~300 MB, CPU-only).
 
+<details>
+<summary><b>Windows users — read this</b></summary>
+
+If Blender lives under `C:\Program Files\`, plain pip silently falls back to a per-user folder that **Blender's embedded Python can't see** — torch ends up "installed" but the addon still says *PyTorch is not installed*.
+
+Fix: open **Command Prompt as Administrator** (Start menu → type `cmd` → right-click → *Run as administrator*) and use the `--no-user` flag:
+
+```cmd
+"C:\Program Files\Blender Foundation\Blender 5.1\5.1\python\bin\python.exe" -m pip install --upgrade --force-reinstall --no-user -r requirements.txt
+```
+
+Then **fully quit and reopen Blender** so it picks up the new modules (failed imports are cached for the whole session).
+
+To verify, open Blender's *Python Console* panel and run `import torch`. If it works there, the addon will work too.
+
+</details>
+
 ### C. Download MNIST
 
 Run this from your normal terminal (not inside Blender), in the repo root:
