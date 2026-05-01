@@ -10,6 +10,8 @@ FunctionNodeIntegerMath + GeometryNodeAttributeDomainSize).
 
 from __future__ import annotations
 
+import math
+
 import bpy
 
 NODE_GROUP_NAME = "NeuralNetwork"
@@ -342,6 +344,11 @@ def _build_layer(
     plane.inputs["Vertices X"].default_value = 2
     plane.inputs["Vertices Y"].default_value = 2
 
+    plane_rot = _new(group, "GeometryNodeTransform", f"{size_socket} PlaneRot",
+                     (1900, y_offset + 100))
+    plane_rot.inputs["Rotation"].default_value = (0.0, math.radians(90.0), 0.0)
+    _link(group, plane.outputs["Mesh"], plane_rot.inputs["Geometry"])
+
     aspect_switch = _new(group, "GeometryNodeIndexSwitch", f"{size_socket} AspectSwitch",
                          (2000, y_offset + 300))
     aspect_switch.data_type = "GEOMETRY"
@@ -351,7 +358,7 @@ def _build_layer(
     _link(group, ico.outputs["Mesh"], aspect_switch.inputs[1])
     _link(group, uv_sphere.outputs["Mesh"], aspect_switch.inputs[2])
     _link(group, cube.outputs["Mesh"], aspect_switch.inputs[3])
-    _link(group, plane.outputs["Mesh"], aspect_switch.inputs[4])
+    _link(group, plane_rot.outputs["Geometry"], aspect_switch.inputs[4])
 
     scale_vec = _new(group, "ShaderNodeCombineXYZ", f"{size_socket} Scale",
                      (2000, y_offset))
