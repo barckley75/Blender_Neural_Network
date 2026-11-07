@@ -49,7 +49,7 @@ def save_model(model: "nn.Module", layer_sizes: list[int], path: str) -> None:
 def load_model(path: str) -> tuple["nn.Module", list[int]]:
     if not _TORCH_AVAILABLE:
         raise RuntimeError("PyTorch not installed")
-    obj = torch.load(path, map_location="cpu")
+    obj = torch.load(path, map_location="cpu", weights_only=True)
     if not isinstance(obj, dict) or "state_dict" not in obj or "layer_sizes" not in obj:
         raise ValueError("Model file missing 'state_dict' or 'layer_sizes'")
     layer_sizes = list(obj["layer_sizes"])
