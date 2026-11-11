@@ -1,6 +1,7 @@
 import bpy
 
 from . import tree_builder
+from .modinputs import get_input, set_input
 
 NODE_GROUP_NAME = tree_builder.NODE_GROUP_NAME
 NN_MARKER_PROP = "is_neural_network"
@@ -32,7 +33,7 @@ def set_modifier_input(mod: bpy.types.Modifier, name: str, value) -> bool:
     ident = socket_identifier(mod.node_group, name)
     if ident is None:
         return False
-    mod[ident] = value
+    set_input(mod, ident, value)
     return True
 
 
@@ -137,8 +138,8 @@ class NN_OT_load_sample(bpy.types.Operator):
             grid_ident = socket_identifier(mod.node_group, "Input Grid")
             input_size_ident = socket_identifier(mod.node_group, "Input Size")
             if grid_ident and input_size_ident:
-                rows = int(mod[grid_ident])
-                tree_input_size = int(mod[input_size_ident])
+                rows = int(get_input(mod, grid_ident))
+                tree_input_size = int(get_input(mod, input_size_ident))
                 cols = (tree_input_size + rows - 1) // rows if rows > 0 else 0
                 if rows > 0 and cols > 0 and rows * cols == input_size:
                     img = sample.reshape(rows, cols)

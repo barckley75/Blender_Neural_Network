@@ -4,7 +4,7 @@ Imported by the addon (so the Rebuild Tree operator can regenerate the tree
 with a user-chosen number of hidden layers) and by the repo-root
 `build_gn_tree.py` script (which just calls into here then saves a .blend).
 
-API target: Blender 5.1 (NodeTreeInterface API + GeometryNodeIndexSwitch +
+API target: Blender 5.1 and 5.2 (NodeTreeInterface API + GeometryNodeIndexSwitch +
 FunctionNodeIntegerMath + GeometryNodeAttributeDomainSize).
 """
 
@@ -13,6 +13,8 @@ from __future__ import annotations
 import math
 
 import bpy
+
+from .modinputs import get_input, set_input
 
 NODE_GROUP_NAME = "NeuralNetwork"
 WEIGHT_ATTRIBUTE = "nn_weight"
@@ -62,7 +64,8 @@ def _ensure_emission_material(
         return mat
     mat = bpy.data.materials.new(name)
     mat.use_fake_user = True
-    mat.use_nodes = True
+    if bpy.app.version < (5, 0, 0):
+        mat.use_nodes = True  # always on in 5.x, removed in 6.0
     nt = mat.node_tree
     for n in list(nt.nodes):
         nt.nodes.remove(n)
@@ -220,6 +223,17 @@ def _link(group, a_out, b_in):
     group.links.new(a_out, b_in)
 
 
+def _int_compare_inputs(cmp):
+    """A/B inputs of an INT Compare node. Blender <=5.1 lists every type's
+    sockets (INT A/B at 2/3); 5.2+ only lists the active type's (0/1)."""
+    if bpy.app.version < (5, 2, 0):
+        return cmp.inputs[2], cmp.inputs[3]
+    ints = [s for s in cmp.inputs if s.type == "INT"]
+    if len(ints) >= 2:
+        return ints[0], ints[1]
+    return cmp.inputs[0], cmp.inputs[1]
+
+
 def _build_layer(
     group: bpy.types.NodeTree,
     group_input: bpy.types.Node,
@@ -284,8 +298,9 @@ def _build_layer(
                (1200, y_offset - 200))
     cmp.data_type = "INT"
     cmp.operation = "LESS_THAN"
-    _link(group, index_node.outputs[0], cmp.inputs[2])
-    _link(group, out_in[size_socket], cmp.inputs[3])
+    cmp_a, cmp_b = _int_compare_inputs(cmp)
+    _link(group, index_node.outputs[0], cmp_a)
+    _link(group, out_in[size_socket], cmp_b)
 
     delete_geo = _new(group, "GeometryNodeDeleteGeometry", f"{size_socket} Trim",
                       (1400, y_offset))
@@ -493,8 +508,9 @@ def _build_connection_pair(
     cmp = _new(group, "FunctionNodeCompare", "IsOdd", (x + 1000, y - 900))
     cmp.data_type = "INT"
     cmp.operation = "EQUAL"
-    _link(group, mod2.outputs[0], cmp.inputs[2])
-    cmp.inputs[3].default_value = 1
+    cmp_a, cmp_b = _int_compare_inputs(cmp)
+    _link(group, mod2.outputs[0], cmp_a)
+    cmp_b.default_value = 1
 
     set_pos = _new(group, "GeometryNodeSetPosition", "MoveOdd", (x + 1400, y))
     _link(group, real.outputs["Geometry"], set_pos.inputs["Geometry"])
@@ -734,7 +750,7 @@ def snapshot_modifier_values(group: bpy.types.NodeTree) -> dict:
                 snap = {}
                 for ident, name in id_to_name.items():
                     try:
-                        snap[name] = mod[ident]
+                        snap[name] = get_input(mod, ident)
                     except (KeyError, TypeError):
                         pass
                 snapshots[(obj.name, mod.name)] = snap
@@ -760,6 +776,6 @@ def restore_modifier_values(group: bpy.types.NodeTree, snapshots: dict) -> None:
             if ident is None:
                 continue
             try:
-                mod[ident] = value
-            except (TypeError, ValueError):
+                set_input(mod, ident, value)
+            except (TypeError, ValueError, AttributeError):
                 pass

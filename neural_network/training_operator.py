@@ -4,6 +4,7 @@ import bpy
 
 from . import tree_builder
 from .operators import get_nn_modifier, socket_identifier
+from .modinputs import get_input, set_input
 
 
 def _layer_sizes_from_modifier(mod) -> list[int]:
@@ -15,7 +16,7 @@ def _layer_sizes_from_modifier(mod) -> list[int]:
         ident = socket_identifier(group, f"{name} Size")
         if ident is None:
             continue
-        sizes.append(int(mod[ident]))
+        sizes.append(int(get_input(mod, ident)))
     return sizes
 
 
@@ -94,7 +95,7 @@ def _push_weights_to_object(obj, trainer) -> tuple[int, float]:
     if mod is not None:
         ident = socket_identifier(mod.node_group, "Weight Scale")
         if ident is not None:
-            mod[ident] = 1.0
+            set_input(mod, ident, 1.0)
 
     return n, max_abs
 
