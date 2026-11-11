@@ -4,8 +4,9 @@ from . import tree_builder
 from .operators import (
     NODE_GROUP_NAME,
     get_nn_modifier,
-    modifier_input_path,
+    socket_identifier,
 )
+from .modinputs import draw_input
 
 
 class _NNTabBase:
@@ -65,11 +66,11 @@ class VIEW3D_PT_NN_main(_NNTabBase, bpy.types.Panel):
 
 
 def _draw_mod_prop(layout, mod, socket_name: str, label: str | None = None):
-    path = modifier_input_path(mod, socket_name)
-    if path is None:
+    ident = socket_identifier(mod.node_group, socket_name)
+    if ident is None:
         layout.label(text=f"(missing socket: {socket_name})", icon="ERROR")
         return
-    layout.prop(mod, path, text=label if label is not None else socket_name)
+    draw_input(layout, mod, ident, label if label is not None else socket_name)
 
 
 class VIEW3D_PT_NN_aspect(_NNPanelBase, bpy.types.Panel):
